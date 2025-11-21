@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Woof Walk - Emergency Contact System</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+        }
+        #root {
+            min-height: 100vh;
+        }
+        .fade-in {
+            animation: fadeIn 0.3s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // Storage helpers
+        const storage = {
+            save: (key, data) => localStorage.setItem(key, JSON.stringify(data)),
+            load: (key) => {
+                try {
+                    return JSON.parse(localStorage.getItem(key));
+                } catch {
+                    return null;
+                }
+            }
+        };
+
+        function WoofWalkApp() {
+            const [view, setView] = useState('public'); // 'public', 'admin', 'booking'
+            const [clients, setClients] = useState([]);
+            const [currentWalk, setCurrentWalk] = useState(null);
+            const [adminPassword, setAdminPassword] = useState('');
+            const [isAuthenticated, setIsAuthenticated] = useState(false);
+            const [showBookingForm, setShowBookingForm] = useState(false);
+
+            const ADMIN_PASSWORD = 'woofwalk2024'; // Change this to your preferred password
+
+            // Load data on mount
+            useEffect(() => {
+                const savedClients = storage.load('woofWalkClients') || [];
+                const savedWalk = storage.load('woofWalkCurrentWalk');
+                setClients(savedClients);
+                setCurrentWalk(savedWalk);
+            }, []);
+
+            // Save clients when they change
+            useEffect(() => {
+                storage.save('woofWalkClients', clients);
+            }, [clients]);
+
+            // Save current walk when it changes
+            useEffect(() => {
+                storage.save('woofWalkCurrentWalk', currentWalk);
+            }, [currentWalk]);
+
+            const handleAdminLogin = (e) => {
+                e.preventDefault();
+                if (adminPassword === ADMIN_PASSWORD) {
+                    setIsAuthenticated(true);
+                    setView('admin');
+                } else {
+                    alert('Incorrect password');
+                }
+            };
+
+            const startWalk = (clientId) => {
+                setCurrentWalk({ clientId, startTime: new Date().toISOString() });
+                alert('Walk started! QR code now shows this dog\'s info.');
+            };
+
+            const endWalk = () => {
+                if (window.confirm('End current walk?')) {
+                    setCurrentWalk(null);
+                    alert('Walk ended. QR code now shows no active walk.');
+                }
+            };
+
+            const addClient = (clientData) => {
+                const newClient = {
+                    ...clientData,
+                    id: Date.now().toString(),
+                    createdAt: new Date().toISOString()
+                };
+                setClients([...clients, newClient]);
+                setShowBookingForm(false);
+                alert('Client added successfully!');
+            };
+
+            const deleteClient = (clientId) => {
+                if (window.confirm('Delete this client? This cannot be undone.')) {
+                    setClients(clients.filter(c => c.id !== clientId));
+                    if (currentWalk?.clientId === clientId) {
+                        setCurrentWalk(null);
+                    }
+                }
+            };
+
+            // PUBLIC VIEW - Emergency Contact Info
+            const PublicView = () => {
+                if (!currentWalk) {
+                    return (
+                        <div style={{
+                            minHeight: '100vh',
+                            background: 'linear-gradient(135deg, #003366 0%, #005599 100%)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: '20px'
+                        }}>
+                            <div className="fade-in" style={{
+                                background: 'white',
+                                borderRadius: '20px',
+                                padding: '40px',
+                                maxWidth: '400px',
+                                textAlign: 'center',
+                                boxShadow: '0 10px 40px rgba(0,0,0,0.2)'
+                            }}>
+                                <div style={{ fontSize: '60px', marginBottom: '20px' }}>🐾</div>
+                                <h2 style={{ color: '#003366', marginBottom: '15px', fontSize: '28px' }}>
+                                    Woof Walk
+                                </h2>
+                                <p style={{ color: '#666', fontSize: '16px', lineHeight: '1.6', marginBottom: '20px' }}>
+                                    No dog is currently on a walk
+                                </p>
+                                <button
+                                    onClick={() => setView('booking')}
+                                    style={{
+                                        background: '#20C997',
+                                        color: 'white',
+                                        border: 'none',
+                                        padding: '12px 30px',
+                                        borderRadius: '10px',
+                                        fontSize: '16px',
+                                        fontWeight: 'bold',
+                                        cursor: 'pointer',
+                                        marginBottom: '10px',
+                                        width: '100%'
+                                    }}
+                                >
+                                    📝 New Client Booking
+                                </button>
+                                <button
+                                    onClick={() => setView('admin')}
+                                    style={{
+                                        background: 'transparent',
+                                        color: '#003366',
+                                        border: '2px solid #003366',
+                                        padding: '12px 30px',
+                                        borderRadius: '10px',
+                                        fontSize: '16px',
+                                        fontWeight: 'bold',
+                                        cursor: 'pointer',
+                                        width: '100%'
+                                    }}
+                                >
+                                    🔐 Admin Login
+                                </button>
+                            </div>
+                        </div>
+                    );
+                }
+
+                const client = clients.find(c => c.id === currentWalk.clientId);
+                if (!client) return null;
+
+                return (
+                    <div style={{
+                        minHeight: '100vh',
+                        background: 'linear-gradient(135deg, #003366 0%, #005599 100%)',
+                        padding: '20px'
+                    }}>
+                        {/* Emergency Banner */}
+                        <div className="fade-in" style={{
+                            background: '#FF3B30',
+                            color: 'white',
+                            padding: '20px',
+                            borderRadius: '15px',
+                            marginBottom: '20px',
+                            textAlign: 'center',
+                            fontWeight: 'bold',
+                            fontSize: '18px',
+                            boxShadow: '0 4px 15px rgba(255,59,48,0.3)'
+                        }}>
+                            🚨 DOG CURRENTLY ON WALK
+                        </div>
+
+                        {/* Main Contact Card */}
+                        <div className="fade-in" style={{
+                            background: 'white',
+                            borderRadius: '20px',
+                            padding: '30px',
+                            marginBottom: '20px',
+                            boxShadow: '0 10px 40px rgba(0,0,0,0.2)'
+                        }}>
+                            <div style={{ fontSize: '50px', textAlign: 'center', marginBottom: '20px' }}>
+                                🐕
+                            </div>
+                            
+                            <h1 style={{
+                                color: '#003366',
+                                fontSize: '32px',
+                                textAlign: 'center',
+                                marginBottom: '30px'
+                            }}>
+                                {client.dogName}
+                            </h1>
+
+                            {/* Call Walker Button */}
+                            <a href="tel:0212176032" style={{
+                                display: 'block',
+                                background: '#FF9500',
+                                color: 'white',
+                                padding: '20px',
+                                borderRadius: '15px',
+                                textAlign: 'center',
+                                textDecoration: 'none',
+                                fontSize: '20px',
+                                fontWeight: 'bold',
+                                marginBottom: '30px',
+                                boxShadow: '0 4px 15px rgba(255,149,0,0.3)'
+                            }}>
+                                📞 Call Walker: 021 217 6032
+                            </a>
+
+                            {/* Owner Details */}
+                            <div style={{
+                                background: '#F8F9FA',
+                                borderRadius: '15px',
+                                padding: '20px',
+                                marginBottom: '20px'
+                            }}>
+                                <h3 style={{
+                                    color: '#003366',
+                                    fontSize: '18px',
+                                    marginBottom: '15px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '10px'
+                                }}>
+                                    👤 Owner Information
+                                </h3>
+                                <div style={{ marginBottom: '12px' }}>
+                                    <strong style={{ color: '#003366' }}>Name:</strong>
+                                    <div style={{ color: '#333', marginTop: '5px' }}>{client.ownerName}</div>
+                                </div>
+                                <div style={{ marginBottom: '12px' }}>
+                                    <strong style={{ color: '#003366' }}>Phone:</strong>
+                                    <div style={{ marginTop: '5px' }}>
+                                        <a href={`tel:${client.ownerPhone}`} style={{
+                                            color: '#007AFF',
+                                            textDecoration: 'none',
+                                            fontSize: '18px'
+                                        }}>
+                                            {client.ownerPhone}
+                                        </a>
+                                    </div>
+                                </div>
+                                {client.ownerEmail && (
+                                    <div>
+                                        <strong style={{ color: '#003366' }}>Email:</strong>
+                                        <div style={{ marginTop: '5px' }}>
+                                            <a href={`mailto:${client.ownerEmail}`} style={{
+                                                color: '#007AFF',
+                                                textDecoration: 'none',
+                                                wordBreak: 'break-all'
+                                            }}>
+                                                {client.ownerEmail}
+                                            </a>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Address */}
+                            {client.address && (
+                                <div style={{
+                                    background: '#F8F9FA',
+                                    borderRadius: '15px',
+                                    padding: '20px',
+                                    marginBottom: '20px'
+                                }}>
+                                    <h3 style={{
+                                        color: '#003366',
+                                        fontSize: '18px',
+                                        marginBottom: '10px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '10px'
+                                    }}>
+                                        📍 Home Address
+                                    </h3>
+                                    <div style={{ color: '#333', lineHeight: '1.6' }}>
+                                        {client.address}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Medical Information */}
+                            {client.medicalInfo && (
+                                <div style={{
+                                    background: '#FFF3CD',
+                                    border: '2px solid #FFC107',
+                                    borderRadius: '15px',
+                                    padding: '20px',
+                                    marginBottom: '20px'
+                                }}>
+                                    <h3 style={{
+                                        color: '#856404',
+                                        fontSize: '18px',
+                                        marginBottom: '10px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '10px'
+                                    }}>
+                                        ⚕️ Medical Information
+                                    </h3>
+                                    <div style={{ color: '#856404', lineHeight: '1.6' }}>
+                                        {client.medicalInfo}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Emergency Contact */}
+                            {client.emergencyContact && (
+                                <div style={{
+                                    background: '#F8F9FA',
+                                    borderRadius: '15px',
+                                    padding: '20px'
+                                }}>
+                                    <h3 style={{
+                                        color: '#003366',
+                                        fontSize: '18px',
+                                        marginBottom: '10px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '10px'
+                                    }}>
+                                        🆘 Emergency Contact
+                                    </h3>
+                                    <div style={{ color: '#333', lineHeight: '1.6' }}>
+                                        {client.emergencyContact}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Admin Access */}
+                        <button
+                            onClick={() => setView('admin')}
+                            style={{
+                                background: 'rgba(255,255,255,0.2)',
+                                color: 'white',
+                                border: '2px solid white',
+                                padding: '12px 30px',
+                                borderRadius: '10px',
+                                fontSize: '14px',
+                                fontWeight: 'bold',
+                                cursor: 'pointer',
+                                width: '100%',
+                                marginBottom: '20px'
+                            }}
+                        >
+                            🔐 Admin Access
+                        </button>
+
+                        {/* Branding Footer */}
+                        <div style={{
+                            textAlign: 'center',
+                            color: 'white',
+                            padding: '20px'
+                        }}>
+                            <div style={{ fontSize: '24px', marginBottom: '10px' }}>🐾</div>
+                            <div style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '5px' }}>
+                                Woof Walk
+                            </div>
+                            <div style={{ fontSize: '14px', opacity: 0.9 }}>
+                                Professional Dog Walking • Wellington
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+            // BOOKING FORM
+            const BookingForm = () => {
+                const [formData, setFormData] = useState({
+                    dogName: '',
+                    ownerName: '',
+                    ownerPhone: '',
+                    ownerEmail: '',
+                    address: '',
+                    medicalInfo: '',
+                    emergencyContact: ''
+                });
+
+                const handleSubmit = (e) => {
+                    e.preventDefault();
+                    if (!formData.dogName || !formData.ownerName || !formData.ownerPhone) {
+                        alert('Please fill in all required fields');
+                        return;
+                    }
+                    addClient(formData);
+                };
+
+                const handleChange = (field, value) => {
+                    setFormData({ ...formData, [field]: value });
+                };
+
+                return (
+                    <div style={{
+                        minHeight: '100vh',
+                        background: 'linear-gradient(135deg, #003366 0%, #005599 100%)',
+                        padding: '20px'
+                    }}>
+                        <div className="fade-in" style={{
+                            background: 'white',
+                            borderRadius: '20px',
+                            padding: '30px',
+                            maxWidth: '600px',
+                            margin: '0 auto',
+                            boxShadow: '0 10px 40px rgba(0,0,0,0.2)'
+                        }}>
+                            <div style={{ textAlign: 'center', marginBottom: '30px' }}>
+                                <div style={{ fontSize: '50px', marginBottom: '15px' }}>🐾</div>
+                                <h2 style={{ color: '#003366', fontSize: '28px', marginBottom: '10px' }}>
+                                    New Client Booking
+                                </h2>
+                                <p style={{ color: '#666', fontSize: '14px' }}>
+                                    Fill in your dog's details for safe walking
+                                </p>
+                            </div>
+
+                            <form onSubmit={handleSubmit}>
+                                <div style={{ marginBottom: '20px' }}>
+                                    <label style={{
+                                        display: 'block',
+                                        color: '#003366',
+                                        fontWeight: 'bold',
+                                        marginBottom: '8px'
+                                    }}>
+                                        Dog's Name *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        required
+                                        value={formData.dogName}
+                                        onChange={(e) => handleChange('dogName', e.target.value)}
+                                        style={{
+                                            width: '100%',
+                                            padding: '12px',
+                                            border: '2px solid #E0E0E0',
+                                            borderRadius: '10px',
+                                            fontSize: '16px'
+                                        }}
+                                        placeholder="e.g., Max"
+                                    />
+                                </div>
+
+                                <div style={{ marginBottom: '20px' }}>
+                                    <label style={{
+                                        display: 'block',
+                                        color: '#003366',
+                                        fontWeight: 'bold',
+                                        marginBottom: '8px'
+                                    }}>
+                                        Owner's Name *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        required
+                                        value={formData.ownerName}
+                                        onChange={(e) => handleChange('ownerName', e.target.value)}
+                                        style={{
+                                            width: '100%',
+                                            padding: '12px',
+                                            border: '2px solid #E0E0E0',
+                                            borderRadius: '10px',
+                                            fontSize: '16px'
+                                        }}
+                                        placeholder="Your full name"
+                                    />
+                                </div>
+
+                                <div style={{ marginBottom: '20px' }}>
+                                    <label style={{
+                                        display: 'block',
+                                        color: '#003366',
+                                        fontWeight: 'bold',
+                                        marginBottom: '8px'
+                                    }}>
+                                        Owner's Phone *
+                                    </label>
+                                    <input
+                                        type="tel"
+                                        required
+                                        value={formData.ownerPhone}
+                                        onChange={(e) => handleChange('ownerPhone', e.target.value)}
+                                        style={{
+                                            width: '100%',
+                                            padding: '12px',
+                                            border: '2px solid #E0E0E0',
+                                            borderRadius: '10px',
+                                            fontSize: '16px'
+                                        }}
+                                        placeholder="021 123 4567"
+                                    />
+                                </div>
+
+                                <div style={{ marginBottom: '20px' }}>
+                                    <label style={{
+                                        display: 'block',
+                                        color: '#003366',
+                                        fontWeight: 'bold',
+                                        marginBottom: '8px'
+                                    }}>
+                                        Owner's Email
+                                    </label>
+                                    <input
+                                        type="email"
+                                        value={formData.ownerEmail}
+                                        onChange={(e) => handleChange('ownerEmail', e.target.value)}
+                                        style={{
+                                            width: '100%',
+                                            padding: '12px',
+                                            border: '2px solid #E0E0E0',
+                                            borderRadius: '10px',
+                                            fontSize: '16px'
+                                        }}
+                                        placeholder="your@email.com"
+                                    />
+                                </div>
+
+                                <div style={{ marginBottom: '20px' }}>
+                                    <label style={{
+                                        display: 'block',
+                                        color: '#003366',
+                                        fontWeight: 'bold',
+                                        marginBottom: '8px'
+                                    }}>
+                                        Home Address
+                                    </label>
+                                    <textarea
+                                        value={formData.address}
+                                        onChange={(e) => handleChange('address', e.target.value)}
+                                        style={{
+                                            width: '100%',
+                                            padding: '12px',
+                                            border: '2px solid #E0E0E0',
+                                            borderRadius: '10px',
+                                            fontSize: '16px',
+                                            minHeight: '80px',
+                                            fontFamily: 'inherit'
+                                        }}
+                                        placeholder="Full home address"
+                                    />
+                                </div>
+
+                                <div style={{ marginBottom: '20px' }}>
+                                    <label style={{
+                                        display: 'block',
+                                        color: '#003366',
+                                        fontWeight: 'bold',
+                                        marginBottom: '8px'
+                                    }}>
+                                        Medical Information
+                                    </label>
+                                    <textarea
+                                        value={formData.medicalInfo}
+                                        onChange={(e) => handleChange('medicalInfo', e.target.value)}
+                                        style={{
+                                            width: '100%',
+                                            padding: '12px',
+                                            border: '2px solid #E0E0E0',
+                                            borderRadius: '10px',
+                                            fontSize: '16px',
+                                            minHeight: '80px',
+                                            fontFamily: 'inherit'
+                                        }}
+                                        placeholder="Allergies, medications, health conditions, etc."
+                                    />
+                                </div>
+
+                                <div style={{ marginBottom: '30px' }}>
+                                    <label style={{
+                                        display: 'block',
+                                        color: '#003366',
+                                        fontWeight: 'bold',
+                                        marginBottom: '8px'
+                                    }}>
+                                        Emergency Contact
+                                    </label>
+                                    <textarea
+                                        value={formData.emergencyContact}
+                                        onChange={(e) => handleChange('emergencyContact', e.target.value)}
+                                        style={{
+                                            width: '100%',
+                                            padding: '12px',
+                                            border: '2px solid #E0E0E0',
+                                            borderRadius: '10px',
+                                            fontSize: '16px',
+                                            minHeight: '60px',
+                                            fontFamily: 'inherit'
+                                        }}
+                                        placeholder="Alternative contact person and phone number"
+                                    />
+                                </div>
+
+                                <button
+                                    type="submit"
+                                    style={{
+                                        width: '100%',
+                                        background: '#20C997',
+                                        color: 'white',
+                                        border: 'none',
+                                        padding: '15px',
+                                        borderRadius: '10px',
+                                        fontSize: '18px',
+                                        fontWeight: 'bold',
+                                        cursor: 'pointer',
+                                        marginBottom: '10px'
+                                    }}
+                                >
+                                    Submit Booking
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => setView('public')}
+                                    style={{
+                                        width: '100%',
+                                        background: 'transparent',
+                                        color: '#003366',
+                                        border: '2px solid #003366',
+                                        padding: '15px',
+                                        borderRadius: '10px',
+                                        fontSize: '16px',
+                                        fontWeight: 'bold',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    Cancel
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                );
+            };
+
+            // ADMIN VIEW
+            const AdminView = () => {
+                if (!isAuthenticated) {
+                    return (
+                        <div style={{
+                            minHeight: '100vh',
+                            background: 'linear-gradient(135deg, #003366 0%, #005599 100%)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: '20px'
+                        }}>
+                            <div className="fade-in" style={{
+                                background: 'white',
+                                borderRadius: '20px',
+                                padding: '40px',
+                                maxWidth: '400px',
+                                width: '100%',
+                                boxShadow: '0 10px 40px rgba(0,0,0,0.2)'
+                            }}>
+                                <div style={{ textAlign: 'center', marginBottom: '30px' }}>
+                                    <div style={{ fontSize: '50px', marginBottom: '15px' }}>🔐</div>
+                                    <h2 style={{ color: '#003366', fontSize: '28px' }}>
+                                        Admin Login
+                                    </h2>
+                                </div>
+
+                                <form onSubmit={handleAdminLogin}>
+                                    <div style={{ marginBottom: '20px' }}>
+                                        <label style={{
+                                            display: 'block',
+                                            color: '#003366',
+                                            fontWeight: 'bold',
+                                            marginBottom: '8px'
+                                        }}>
+                                            Password
+                                        </label>
+                                        <input
+                                            type="password"
+                                            value={adminPassword}
+                                            onChange={(e) => setAdminPassword(e.target.value)}
+                                            style={{
+                                                width: '100%',
+                                                padding: '12px',
+                                                border: '2px solid #E0E0E0',
+                                                borderRadius: '10px',
+                                                fontSize: '16px'
+                                            }}
+                                            placeholder="Enter admin password"
+                                        />
+                                    </div>
+
+                                    <button
+                                        type="submit"
+                                        style={{
+                                            width: '100%',
+                                            background: '#003366',
+                                            color: 'white',
+                                            border: 'none',
+                                            padding: '15px',
+                                            borderRadius: '10px',
+                                            fontSize: '18px',
+                                            fontWeight: 'bold',
+                                            cursor: 'pointer',
+                                            marginBottom: '10px'
+                                        }}
+                                    >
+                                        Login
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => setView('public')}
+                                        style={{
+                                            width: '100%',
+                                            background: 'transparent',
+                                            color: '#003366',
+                                            border: '2px solid #003366',
+                                            padding: '15px',
+                                            borderRadius: '10px',
+                                            fontSize: '16px',
+                                            fontWeight: 'bold',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        Back
+                                    </button>
+                                </form>
+
+                                <div style={{
+                                    marginTop: '20px',
+                                    padding: '15px',
+                                    background: '#FFF3CD',
+                                    borderRadius: '10px',
+                                    fontSize: '13px',
+                                    color: '#856404'
+                                }}>
+                                    <strong>Default password:</strong> woofwalk2024<br/>
+                                    (Change this in the code)
+                                </div>
+                            </div>
+                        </div>
+                    );
+                }
+
+                return (
+                    <div style={{
+                        minHeight: '100vh',
+                        background: '#F8F9FA',
+                        padding: '20px'
+                    }}>
+                        {/* Header */}
+                        <div className="fade-in" style={{
+                            background: 'linear-gradient(135deg, #003366 0%, #005599 100%)',
+                            borderRadius: '20px',
+                            padding: '30px',
+                            marginBottom: '20px',
+                            color: 'white',
+                            boxShadow: '0 4px 15px rgba(0,0,0,0.1)'
+                        }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                                <div>
+                                    <h1 style={{ fontSize: '28px', marginBottom: '5px' }}>
+                                        Woof Walk Admin
+                                    </h1>
+                                    <p style={{ opacity: 0.9, fontSize: '14px' }}>
+                                        Manage your clients and walks
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        setIsAuthenticated(false);
+                                        setView('public');
+                                    }}
+                                    style={{
+                                        background: 'rgba(255,255,255,0.2)',
+                                        color: 'white',
+                                        border: '2px solid white',
+                                        padding: '10px 20px',
+                                        borderRadius: '10px',
+                                        fontSize: '14px',
+                                        fontWeight: 'bold',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    Logout
+                                </button>
+                            </div>
+
+                            {currentWalk && (
+                                <div style={{
+                                    background: 'rgba(255,255,255,0.2)',
+                                    padding: '15px',
+                                    borderRadius: '10px',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center'
+                                }}>
+                                    <div>
+                                        <div style={{ fontSize: '14px', opacity: 0.9, marginBottom: '5px' }}>
+                                            Currently Walking:
+                                        </div>
+                                        <div style={{ fontSize: '20px', fontWeight: 'bold' }}>
+                                            {clients.find(c => c.id === currentWalk.clientId)?.dogName}
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={endWalk}
+                                        style={{
+                                            background: '#FF3B30',
+                                            color: 'white',
+                                            border: 'none',
+                                            padding: '12px 24px',
+                                            borderRadius: '10px',
+                                            fontSize: '14px',
+                                            fontWeight: 'bold',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        End Walk
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Add Client Button */}
+                        <button
+                            onClick={() => setShowBookingForm(true)}
+                            style={{
+                                width: '100%',
+                                background: '#20C997',
+                                color: 'white',
+                                border: 'none',
+                                padding: '15px',
+                                borderRadius: '15px',
+                                fontSize: '18px',
+                                fontWeight: 'bold',
+                                cursor: 'pointer',
+                                marginBottom: '20px',
+                                boxShadow: '0 4px 15px rgba(32,201,151,0.3)'
+                            }}
+                        >
+                            + Add New Client
+                        </button>
+
+                        {/* Client List */}
+                        {clients.length === 0 ? (
+                            <div className="fade-in" style={{
+                                background: 'white',
+                                borderRadius: '15px',
+                                padding: '40px',
+                                textAlign: 'center',
+                                color: '#999'
+                            }}>
+                                <div style={{ fontSize: '50px', marginBottom: '15px' }}>🐕</div>
+                                <p>No clients yet. Add your first client to get started!</p>
+                            </div>
+                        ) : (
+                            <div>
+                                <h2 style={{
+                                    color: '#003366',
+                                    fontSize: '20px',
+                                    marginBottom: '15px',
+                                    paddingLeft: '5px'
+                                }}>
+                                    Your Clients ({clients.length})
+                                </h2>
+                                {clients.map(client => (
+                                    <div key={client.id} className="fade-in" style={{
+                                        background: 'white',
+                                        borderRadius: '15px',
+                                        padding: '20px',
+                                        marginBottom: '15px',
+                                        boxShadow: '0 2px 10px rgba(0,0,0,0.1)'
+                                    }}>
+                                        <div style={{
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'flex-start',
+                                            marginBottom: '15px'
+                                        }}>
+                                            <div>
+                                                <h3 style={{
+                                                    color: '#003366',
+                                                    fontSize: '22px',
+                                                    marginBottom: '5px'
+                                                }}>
+                                                    🐕 {client.dogName}
+                                                </h3>
+                                                <div style={{ color: '#666', fontSize: '14px' }}>
+                                                    Owner: {client.ownerName}
+                                                </div>
+                                                <div style={{ color: '#666', fontSize: '14px' }}>
+                                                    📞 {client.ownerPhone}
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={() => deleteClient(client.id)}
+                                                style={{
+                                                    background: '#FF3B30',
+                                                    color: 'white',
+                                                    border: 'none',
+                                                    padding: '8px 12px',
+                                                    borderRadius: '8px',
+                                                    fontSize: '12px',
+                                                    cursor: 'pointer'
+                                                }}
+                                            >
+                                                Delete
+                                            </button>
+                                        </div>
+
+                                        {currentWalk?.clientId === client.id ? (
+                                            <div style={{
+                                                background: '#20C997',
+                                                color: 'white',
+                                                padding: '12px',
+                                                borderRadius: '10px',
+                                                textAlign: 'center',
+                                                fontWeight: 'bold'
+                                            }}>
+                                                ✓ Currently Walking
+                                            </div>
+                                        ) : (
+                                            <button
+                                                onClick={() => startWalk(client.id)}
+                                                style={{
+                                                    width: '100%',
+                                                    background: '#007AFF',
+                                                    color: 'white',
+                                                    border: 'none',
+                                                    padding: '12px',
+                                                    borderRadius: '10px',
+                                                    fontSize: '16px',
+                                                    fontWeight: 'bold',
+                                                    cursor: 'pointer'
+                                                }}
+                                            >
+                                                Start Walk
+                                            </button>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Quick Actions */}
+                        <div style={{
+                            marginTop: '30px',
+                            padding: '20px',
+                            background: 'white',
+                            borderRadius: '15px',
+                            boxShadow: '0 2px 10px rgba(0,0,0,0.1)'
+                        }}>
+                            <h3 style={{ color: '#003366', marginBottom: '15px' }}>Quick Actions</h3>
+                            <button
+                                onClick={() => setView('public')}
+                                style={{
+                                    width: '100%',
+                                    background: 'transparent',
+                                    color: '#003366',
+                                    border: '2px solid #003366',
+                                    padding: '12px',
+                                    borderRadius: '10px',
+                                    fontSize: '16px',
+                                    fontWeight: 'bold',
+                                    cursor: 'pointer',
+                                    marginBottom: '10px'
+                                }}
+                            >
+                                View Public QR Page
+                            </button>
+                        </div>
+                    </div>
+                );
+            };
+
+            // Main render
+            if (showBookingForm && view === 'admin') {
+                return <BookingForm />;
+            }
+
+            if (view === 'booking') {
+                return <BookingForm />;
+            }
+
+            if (view === 'admin') {
+                return <AdminView />;
+            }
+
+            return <PublicView />;
+        }
+
+        ReactDOM.render(<WoofWalkApp />, document.getElementById('root'));
+    </script>
+</body>
+</html>
